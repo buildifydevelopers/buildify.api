@@ -1,7 +1,7 @@
-from app.main import app
+from fastapi import FastAPI
 
-# Vercel Python runtime will use the `app` ASGI application exported here.
-# This file acts as the serverless function entrypoint.
+app = FastAPI()
 
-
-__all__ = ("app",)
+@app.get("/")
+async def root():
+    return {"status": "ok"}
