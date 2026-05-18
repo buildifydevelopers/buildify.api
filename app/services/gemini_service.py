@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+class LLMParseError(ValueError):
+    """Raised when the provider returns malformed JSON text."""
+
+
 def _is_retryable_exception(exc: BaseException) -> bool:
     """Retry only for transient conditions (timeouts, 429, and 5xx)."""
     if isinstance(exc, httpx.TimeoutException):
@@ -197,7 +201,17 @@ class GeminiService:
                 logger.warning("Cached data failed validation, re-fetching.")
 
         # Call configured LLM provider
-        raw = await self._call_provider(system_instruction, user_prompt)
+        try:
+            raw = await self._call_provider(system_instruction, user_prompt)
+        except LLMParseError as parse_error:
+            logger.warning("LLM returned malformed JSON for %s: %s", cache_type, parse_error)
+            repair_prompt = (
+                "The previous response was not valid JSON. Return a corrected JSON object only, "
+                "preserving the intended meaning and schema as closely as possible. "
+                "Do not add markdown or commentary.\n\n"
+                f"Original prompt:\n{user_prompt}"
+            )
+            raw = await self._call_provider(system_instruction, repair_prompt)
 
         # Validate with Pydantic
         try:
@@ -238,8 +252,11 @@ class GeminiService:
             start = text.find("{")
             end = text.rfind("}")
             if start == -1 or end == -1:
-                raise ValueError("LLM response did not contain valid JSON.")
-            return json.loads(text[start : end + 1])
+                raise LLMParseError("LLM response did not contain valid JSON.")
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError as exc:
+                raise LLMParseError("LLM response contained malformed JSON.") from exc
 
 
 # ── Singleton ──
