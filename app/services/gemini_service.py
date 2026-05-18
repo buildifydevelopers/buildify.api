@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import time
 from typing import Any, Type, TypeVar
 
 import httpx
@@ -24,9 +25,9 @@ def _is_retryable_exception(exc: BaseException) -> bool:
         return status_code == 429 or status_code >= 500
     return False
 
-# Retry: up to 3 attempts, exponential backoff (1s, 2s, 4s)
+# Retry: up to 5 attempts, exponential backoff (1s, 2s, 4s, 8s, 10s)
 _retry_decorator = retry(
-    stop=stop_after_attempt(3),
+    stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     retry=retry_if_exception(_is_retryable_exception),
     before_sleep=lambda state: logger.warning(
@@ -43,6 +44,7 @@ class GeminiService:
     def __init__(self) -> None:
         self._client: httpx.AsyncClient | None = None
         self._concurrency_limit = asyncio.Semaphore(1)
+        self._last_cerebras_call_at: float = 0.0
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -85,6 +87,7 @@ class GeminiService:
         }
 
         logger.info("Calling Gemini API for: %s", user_prompt[:80])
+        self._last_cerebras_call_at = time.monotonic()
         response = await client.post(api_url, json=payload, headers=headers)
         response.raise_for_status()
 
@@ -120,8 +123,22 @@ class GeminiService:
             "Authorization": f"Bearer {settings.cerebras_api_key}",
         }
 
+        min_interval = max(0.0, float(getattr(settings, "cerebras_min_interval_seconds", 0.0)))
+        elapsed = time.monotonic() - self._last_cerebras_call_at
+        if elapsed < min_interval:
+            await asyncio.sleep(min_interval - elapsed)
+
         logger.info("Calling Cerebras API for: %s", user_prompt[:80])
         response = await client.post(api_url, json=payload, headers=headers)
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("retry-after")
+            if retry_after:
+                try:
+                    await asyncio.sleep(max(1.0, float(retry_after)))
+                except ValueError:
+                    await asyncio.sleep(max(2.0, min_interval or 2.0))
+
         response.raise_for_status()
 
         data = response.json()

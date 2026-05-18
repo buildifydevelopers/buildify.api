@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Cerebras API
     cerebras_api_key: str = ""
     cerebras_model: str = "llama3.1-8b"
+    cerebras_min_interval_seconds: float = 2.5
 
     # Authentication
     api_auth_token: str = ""
