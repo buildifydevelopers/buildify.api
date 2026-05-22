@@ -13,5 +13,5 @@ cachetools==5.5.2
 json-repair==0.59.10
 # For PostgreSQL (optional, for production):
 # asyncpg==0.30.0
-firebase-admin==7.6.0
+firebase-admin==7.5.0
 google-cloud-firestore==2.11.0
