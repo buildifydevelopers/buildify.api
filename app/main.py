@@ -17,7 +17,9 @@ from app.routers.refinement import router as refinement_router
 from app.routers.analysis import router as analysis_router
 from app.routers.chat import router as chat_router
 from app.routers.projects import router as projects_router
+from app.routers.payments import router as payments_router
 from app.services.gemini_service import gemini_service
+from app.services.firebase_service import firebase_service
 
 # ── Rate Limiter ──
 limiter = Limiter(key_func=get_remote_address)
@@ -30,6 +32,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Project Builder API...")
     await init_db()
     logger.info("Database initialized.")
+    firebase_service.initialize()
+    logger.info("Firebase initialized.")
     yield
     # Shutdown
     logger.info("Shutting down Project Builder API...")
@@ -84,6 +88,7 @@ app.include_router(refinement_router, prefix="/api/v2", tags=["Idea Refinement"]
 app.include_router(analysis_router, prefix="/api/v2", tags=["Analysis"])
 app.include_router(chat_router, prefix="/api/v2", tags=["Expert Chat"])
 app.include_router(projects_router, prefix="/api/v2", tags=["Projects"])
+app.include_router(payments_router, prefix="/api/v2", tags=["Payments"])
 
 # Keep v1 backward compatibility
 app.include_router(estimation_router, prefix="/api/v1", tags=["Estimation (v1)"])
