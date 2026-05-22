@@ -70,6 +70,15 @@ def verify_signature(payment_id: str, order_id: Optional[str], signature: str, s
     return hmac.compare_digest(expected, signature)
 
 
+@app.get("/")
+async def root() -> dict:
+    return {
+        "status": "ok",
+        "service": "Buildify payment verifier",
+        "message": "Use /api/payments/verify to verify Razorpay payments.",
+    }
+
+
 @app.get("/api/health")
 async def health_check() -> dict:
     return {
